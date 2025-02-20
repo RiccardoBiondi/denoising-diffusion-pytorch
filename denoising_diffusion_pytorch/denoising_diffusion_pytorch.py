@@ -901,9 +901,18 @@ class Trainer:
         inception_block_idx = 2048,
         max_grad_norm = 1.,
         num_fid_samples = 50000,
-        save_best_and_latest_only = False
+        save_best_and_latest_only = False,
+        logger = None
     ):
         super().__init__()
+        
+        # logger
+        if logger is not None:
+            self.logger = logger
+            self.log = True
+        else:
+            self.logger = None
+            self.log = False
 
         # accelerator
 
@@ -1063,6 +1072,9 @@ class Trainer:
 
                 pbar.set_description(f'loss: {total_loss:.4f}')
 
+                if self.log:
+                    self.logger.log_metric({"train_loss": total_loss}, self.step)
+
                 accelerator.wait_for_everyone()
                 accelerator.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
 
@@ -1086,12 +1098,16 @@ class Trainer:
                         all_images = torch.cat(all_images_list, dim = 0)
 
                         utils.save_image(all_images, str(self.results_folder / f'sample-{milestone}.png'), nrow = int(math.sqrt(self.num_samples)))
-
+                        if self.log:
+                            self.logger.log_image()
                         # whether to calculate fid
 
                         if self.calculate_fid:
                             fid_score = self.fid_scorer.fid_score()
                             accelerator.print(f'fid_score: {fid_score}')
+
+                            if self.log:
+                                self.logger.log_metric({"fid_score": fid_score}, self.step)
 
                         if self.save_best_and_latest_only:
                             if self.best_fid > fid_score:
